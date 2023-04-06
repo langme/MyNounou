@@ -55,12 +55,12 @@ private val LightColorPalette = lightColorScheme(
     background = Grey99,
     onBackground = Grey10,
     surface = GreenGrey90,
-    onSurface = GreenGrey30,
+    onSurface = GreenGrey80,
     inverseSurface = Grey20,
     inverseOnSurface = Grey95,
     surfaceVariant = GreenGrey90,
     onSurfaceVariant = GreenGrey30,
-    outline = GreenGrey50
+    outline = GreenGrey50,
 )
 
 @Composable
