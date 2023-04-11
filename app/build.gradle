@@ -102,6 +102,8 @@ dependencies {
 
     implementation 'io.coil-kt:coil-compose:2.2.2'
 
-    // CALENDAR
-    implementation("com.himanshoe:kalendar:1.2.0")
+    //Calendar
+    implementation "io.github.boguszpawlowski.composecalendar:composecalendar:1.1.1"
+    // separate artifact with utilities for working with kotlinx-datetime
+    implementation "io.github.boguszpawlowski.composecalendar:kotlinx-datetime:1.1.1"
 }

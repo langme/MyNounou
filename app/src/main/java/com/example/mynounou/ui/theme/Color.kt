@@ -8,6 +8,7 @@ val Green30 = Color(0xff00993b)
 val Green40 = Color(0xff00cc4e)
 val Green80 = Color(0xff99ffc0)
 val Green90 = Color(0xffccffe0)
+val Green120 = Color(0xFFD2FAEC)
 
 val DarkGreen10 = Color(0xff0d260d)
 val DarkGreen20 = Color(0xff194d19)

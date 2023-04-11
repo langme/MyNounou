@@ -1,9 +1,7 @@
 package com.example.mynounou.compose
 
 import android.os.Build
-import android.util.Log
 import androidx.annotation.RequiresApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -17,45 +15,57 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
-import com.himanshoe.kalendar.Kalendar
-import com.himanshoe.kalendar.color.KalendarThemeColor
-import com.himanshoe.kalendar.model.KalendarDay
-import com.himanshoe.kalendar.model.KalendarType
 import android.app.TimePickerDialog
+import android.util.Log
+import androidx.compose.foundation.*
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.mynounou.viewmodels.CalendarViewModel
+import com.example.mynounou.viewmodels.PlannedDay
+import java.time.LocalDate
+
+import io.github.boguszpawlowski.composecalendar.SelectableCalendar
+import io.github.boguszpawlowski.composecalendar.day.DayState
+import io.github.boguszpawlowski.composecalendar.rememberSelectableCalendarState
+import io.github.boguszpawlowski.composecalendar.selection.DynamicSelectionState
+import io.github.boguszpawlowski.composecalendar.selection.SelectionMode.Single
+
 
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun HomePage(
-    navController: NavHostController
-){
-    var addDate by remember { mutableStateOf(false) }
-    if (addDate) {
-        DialogHourPicker(onClose = {addDate = false})
-    } else {
-        Box(
-            modifier = Modifier
-                .background(MaterialTheme.colorScheme.background)
-                .fillMaxSize()
-        ) {
+    navController: NavHostController,
+    viewModel: CalendarViewModel = hiltViewModel(),
+) {
 
-            Column(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
+    LaunchedEffect(Unit) {
+        viewModel.initialize()
+    }
+
+    Surface() {
+        Column(modifier = Modifier.background(MaterialTheme.colorScheme.inversePrimary)) {
+            Row(modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
             ) {
-                Row(modifier = Modifier.weight(3f)) {
-                    Calendar(modifier = Modifier.fillMaxSize(),
-                        onDaySelected = {
-                            Log.i("date", "date: $it")
-                            addDate = true
-                        })
-                }
-
-                Row(modifier = Modifier.weight(1f)) {
-                    Text(text = "HomePage")
-                }
-
+                // TODO recap heure mois
+                Text(text = LocalDate.now().toString(),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Row(modifier = Modifier
+                .fillMaxWidth()
+                .weight(10f)
+            ) {
+                // TODO view calendar
+                DisplayCalendar(viewModel)
+            }
+            Row(modifier = Modifier
+                .fillMaxWidth()
+                .weight(4f)
+            ) {
+                // TODO view selected day with info
             }
         }
     }
@@ -63,115 +73,270 @@ fun HomePage(
 
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
-fun Calendar(modifier : Modifier, onDaySelected: (KalendarDay) -> Unit){
-    val CalendarThemeColor = KalendarThemeColor(
-        backgroundColor = MaterialTheme.colorScheme.secondaryContainer,
-        dayBackgroundColor = MaterialTheme.colorScheme.inversePrimary,
-        headerTextColor = MaterialTheme.colorScheme.primary
+fun DisplayCalendar(
+    viewModel: CalendarViewModel
+){
+    val screenState by viewModel.selectionFlow.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val state = rememberSelectableCalendarState(
+        initialSelectionMode = Single,
     )
-    val listCalendarThemeColor = mutableListOf<KalendarThemeColor>()
-    for (i in 1..12) {
-        listCalendarThemeColor.add(CalendarThemeColor)
-    }
 
-    Kalendar(
-        modifier = modifier,
-        kalendarType = KalendarType.Firey,
-        kalendarThemeColors = listCalendarThemeColor,
-        onCurrentDayClick =
-            { day, _ ->
-                onDaySelected(day)
+    Column(
+        Modifier.verticalScroll(rememberScrollState())
+    ) {
+        if(!isLoading) {
+            SelectableCalendar(
+                calendarState = state,
+                dayContent = { dayState ->
+                    EventDay(
+                        state = dayState,
+                        eventDay = screenState.firstOrNull { it.date == dayState.date },
+                        viewModel = viewModel
+                    )
+                }
+            )
+        }
+    }
+}
+
+@RequiresApi(Build.VERSION_CODES.O)
+@Composable
+fun EventDay(
+    state: DayState<DynamicSelectionState>,
+    eventDay: PlannedDay?,
+    viewModel: CalendarViewModel,
+    modifier: Modifier = Modifier,
+) {
+    val date = state.date
+    val selectionState = state.selectionState
+    var isClicked by remember {mutableStateOf(false) }
+    val isSelected = selectionState.isDateSelected(date)
+
+    var colorBackground = MaterialTheme.colorScheme.primaryContainer
+    if (eventDay != null) {
+        colorBackground = MaterialTheme.colorScheme.onSecondary
+    }
+    var elevation : Dp
+
+    if (state.isFromCurrentMonth) elevation = 4.dp  else elevation = 0.dp
+
+    var containerColor: Color
+
+    if (isSelected) {
+        containerColor = MaterialTheme.colorScheme.primary
+    } else{
+        containerColor = contentColorFor(
+            backgroundColor = MaterialTheme.colorScheme.inversePrimary)
+    }
+    var addedEvent by remember {mutableStateOf(false) }
+
+    if (isClicked){
+        DialogHourPicker(
+            selectedDay = viewModel.getDay(date),
+            onClose = {isClicked = false},
+            onSave = {
+                //viewModel.updateDay(it)
+                viewModel.addEventDay(it)
+                addedEvent = true
+                isClicked = false },
+            onRemoveEvent = {
+                isClicked =  false
+                addedEvent = false
+                viewModel.removeEventDay(it)
             }
         )
+    }
 
-}
+    var noColorEvent = MaterialTheme.colorScheme.inversePrimary
+    var colorEvent = Color.Red
 
-@RequiresApi(Build.VERSION_CODES.O)
-@Composable
-fun DialogHourPicker(onClose:()->Unit){
-    Dialog(onDismissRequest =  onClose ) {
-        Surface(
+    Card(
+        modifier = modifier
+            .aspectRatio(1f)
+            .padding(2.dp),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = elevation
+        ),
+        border = if (state.isCurrentDay) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.inversePrimary),
+        colors = CardDefaults.cardColors(
+            containerColor =  containerColor,
+        ),
+    ) {
+        Column(
             modifier = Modifier
-                .height(300.dp)
-                .width(300.dp),
-            shape = RoundedCornerShape(4.dp),
-            color = MaterialTheme.colorScheme.onSurface
+                .fillMaxSize()
+                .background(colorBackground)
+                .clickable() {
+                    isClicked = true
+                },
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Box(
-                contentAlignment = Alignment.Center
-            ) {
-                Text(modifier = Modifier.align(Alignment.TopCenter),
-                    text = "Choisir les horraires",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 30.sp,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                HoursPicker()
-                Button(onClick = onClose,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .width(140.dp)
-                        .padding(4.dp)
-                ) {
-                    Text(text = "Validate")
-                }
+            Text(
+                text = date.dayOfMonth.toString(),
+                color = MaterialTheme.colorScheme.primary
+            )
+            if (addedEvent || eventDay != null) {
+                Canvas(
+                    modifier = Modifier.size(18.dp),
+                    onDraw = {
+                        drawCircle(color = colorEvent)
+                    })
+            } else{
+                Canvas(
+                    modifier = Modifier.size(18.dp),
+                    onDraw = { drawCircle(color = noColorEvent) })
             }
         }
     }
 }
 
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
-fun HoursPicker(){
+fun DialogHourPicker(
+    selectedDay : PlannedDay,
+    onClose:()-> Unit,
+    onSave:(PlannedDay) -> Unit,
+    onRemoveEvent: (PlannedDay) -> Unit
+){
     val context = LocalContext.current
     val calendar = android.icu.util.Calendar.getInstance()
     val hour = calendar[android.icu.util.Calendar.HOUR_OF_DAY]
     val minute = calendar[android.icu.util.Calendar.MINUTE]
 
-    val timeStart = remember { mutableStateOf("") }
-    val timeEnd = remember { mutableStateOf("") }
+    val timeStart = remember { mutableStateOf(selectedDay.plannedPeriod.startHour) }
+    val timeEnd = remember { mutableStateOf(selectedDay.plannedPeriod.endHour) }
+
+
     val timeStartPickerDialog = TimePickerDialog(
         context,
         {_, hour : Int, minute: Int ->
+            Log.i("", "Start change hour")
             timeStart.value = "$hour:$minute"
-        }, hour, minute, true
+        }
+        , hour, minute, true
     )
     val timeEndPickerDialog = TimePickerDialog(
         context,
         {_, hour : Int, minute: Int ->
-            timeStart.value = "$hour:$minute"
-        }, hour, minute, true
+            Log.i("", "End change hour")
+            timeEnd.value = "$hour:$minute"
+        },
+        hour, minute, true
     )
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(text = "Start Hour: ${timeStart.value}",
-                modifier = Modifier.weight(2f)
-                    .padding(8.dp))
-            Button(modifier = Modifier.weight(1f),
-                onClick = {
-                timeStartPickerDialog.show()
-            }) {
-                Text(text = "Start")
-            }
-        }
-        Spacer(modifier = Modifier.size(16.dp))
 
-        Row(
-            modifier = Modifier.fillMaxWidth()
+    Dialog(onDismissRequest =  onClose) {
+        Surface(
+            modifier = Modifier
+                .height(400.dp)
+                .width(400.dp),
+            shape = RoundedCornerShape(4.dp),
+            color = MaterialTheme.colorScheme.onSurface
         ) {
-            Text(text = "End Hour: ${timeEnd.value}",
-                modifier = Modifier.weight(2f)
-                    .padding(8.dp))
-            Button(modifier = Modifier.weight(1f),
-                onClick = {
-                timeEndPickerDialog.show()
-            }) {
-                Text(text = "End")
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(6.dp)
+                    .weight(2f)
+                ) {
+                    Text(
+                        text = "Choisir les horraires",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 30.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Row(modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(4f)
+                    .padding(6.dp)) {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(text = "Start Hour: ${timeStart.value}",
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier
+                                    .weight(2f)
+                                    .padding(8.dp))
+                            Button(modifier = Modifier.weight(1f),
+                                onClick = {
+                                    timeStartPickerDialog.show()
+                                }) {
+                                Text(text = "Start")
+                            }
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(text = "End Hour: ${timeEnd.value}",
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier
+                                    .weight(2f)
+                                    .padding(8.dp))
+                            Button(modifier = Modifier.weight(1f),
+                                onClick = {
+                                    timeEndPickerDialog.show()
+                                }) {
+                                Text(text = "End")
+                            }
+                        }
+                    }
+                }
+                Row(modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(2f)
+                    .padding(6.dp)) {
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .padding(4.dp),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally)
+                    {
+                        Button(onClick = {
+                                selectedDay.plannedPeriod.startHour = timeStart.value
+                                selectedDay.plannedPeriod.endHour = timeEnd.value
+                                onSave(selectedDay)
+                            },modifier = Modifier
+                                .width(120.dp)
+                        ) {
+                            Text(text = "Valider")
+                        }
+                    }
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .padding(4.dp),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ){
+                        Button(onClick = onClose,
+                            modifier = Modifier
+                                .width(120.dp)
+                        ) {
+                            Text(text = "retour")
+                        }
+                    }
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .padding(4.dp),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ){
+                        Button(onClick = {onRemoveEvent(selectedDay)},
+                            modifier = Modifier
+                                .width(120.dp)
+                        ) {
+                            Text(text = "Delete")
+                        }
+                    }
+                }
             }
         }
     }
